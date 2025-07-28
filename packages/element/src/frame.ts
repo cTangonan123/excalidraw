@@ -779,13 +779,13 @@ export const isElementInFrame = (
     }
   };
 
-  if (
-    // if the element is not selected, or it is selected but not being dragged,
-    // frame membership won't update, so return true
-    !appState.selectedElementIds[_element.id] ||
+  if ( 
+    // so long as the element overlaps with the frame and
+    // the element is either: not selected, or not being dragged,
+    // or the target frame is selected, return true
+    elementOverlapsWithFrame(_element, frame, allElementsMap) &&
+    (!appState.selectedElementIds[_element.id] ||
     !appState.selectedElementsAreBeingDragged ||
-    // if both frame and element are selected, won't update membership, so return true
-    (appState.selectedElementIds[_element.id] &&
       appState.selectedElementIds[frame.id])
   ) {
     return true;
