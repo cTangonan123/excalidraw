@@ -12,6 +12,7 @@ import {
   SHIFT_LOCKING_ANGLE,
   rescalePoints,
   getFontString,
+  BOUND_TEXT_PADDING,
 } from "@excalidraw/common";
 
 import type { GlobalPoint } from "@excalidraw/math";
@@ -74,6 +75,8 @@ import type {
   ElementsMap,
   ExcalidrawElbowArrowElement,
 } from "./types";
+import App from "@excalidraw/excalidraw/components/App";
+import { result } from "lodash";
 
 // Returns true when transform (resizing/rotation) happened
 export const transformElements = (
@@ -225,7 +228,38 @@ const rotateSingleElement = (
       scene.getElement<ExcalidrawTextElementWithContainer>(boundTextElementId);
 
     if (textElement && !isArrowElement(element)) {
-      scene.mutateElement(textElement, { angle });
+      console.log("element", element);
+      console.log("textElement", textElement);
+
+      // this solution works under all conditions
+      // get the text element's center point of rotation
+      const textAxisX = cx - (textElement.width / 2);
+      const textAxisY = cy - (textElement.height / 2);
+
+      // dx and dy represent the distance from the text element's center of rotation and it's own position
+      let dx = textElement.x - textAxisX;
+      let dy = textElement.y - textAxisY;
+
+      
+      // calculate the hypotenuse and angle from the center of rotation to the text element's position
+      const hypotenuse = Math.hypot(dx, dy);
+      const initTextAngle = Math.atan2(dy, dx) as Radians;
+      
+      // Rotate by the delta angle, not the absolute angle
+      const prevAngle = textElement.angle ?? 0;
+      const deltaAngle = angle - prevAngle;
+      const rotatedAngle = initTextAngle + deltaAngle;
+      
+      // calculate the new position of the text element
+      let resultX = textAxisX + hypotenuse * Math.cos(rotatedAngle);
+      let resultY = textAxisY + hypotenuse * Math.sin(rotatedAngle);
+      
+      
+      scene.mutateElement(textElement, {
+        angle,
+        x: resultX,
+        y: resultY,
+      });
     }
   }
 };
@@ -416,9 +450,32 @@ const rotateMultipleElements = (
 
       const boundText = getBoundTextElement(element, elementsMap);
       if (boundText && !isArrowElement(element)) {
+        // TODO: apply similar logic to bound text as in the change in rotateSingleElement
+        // this solution works under all conditions
+        // get the text element's center point of rotation
+        let textAxisX = centerX - (boundText.width / 2);
+        let textAxisY = centerY - (boundText.height / 2);
+
+        // dx and dy represent the distance from the text element's center of rotation and it's own position
+        const dx = boundText.x - textAxisX;
+        const dy = boundText.y - textAxisY;
+
+        // calculate the hypotenuse and angle from the center of rotation to the text element's position
+        const hypotenuse = Math.hypot(dx, dy);
+        const initTextAngle = Math.atan2(dy, dx) as Radians;
+
+        // Rotate by the delta angle, not the absolute angle
+        const prevAngle = boundText.angle ?? 0;
+        const deltaAngle = centerAngle + origAngle - prevAngle;
+        const rotatedAngle = initTextAngle + deltaAngle;
+
+        // calculate the new position of the text element
+        const resultX = textAxisX + hypotenuse * Math.cos(rotatedAngle);
+        const resultY = textAxisY + hypotenuse * Math.sin(rotatedAngle);
+        
         scene.mutateElement(boundText, {
-          x: boundText.x + (rotatedCX - cx),
-          y: boundText.y + (rotatedCY - cy),
+          x: resultX,
+          y: resultY,
           angle: normalizeRadians((centerAngle + origAngle) as Radians),
         });
       }

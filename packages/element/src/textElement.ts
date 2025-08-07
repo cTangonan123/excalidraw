@@ -235,6 +235,41 @@ export const computeBoundTextPosition = (
   const maxContainerHeight = getBoundTextMaxHeight(container, boundTextElement);
   const maxContainerWidth = getBoundTextMaxWidth(container, boundTextElement);
 
+  // We need to calculate the x and y position of the bound text element
+  // based on the alignment settings. We calculate the x and y position
+  // separately and then return the final coordinates.
+  // The x and y position is calculated based on the container's coordinates
+  // and the bound text element's width and height.
+
+  // const { textAlign, verticalAlign } = boundTextElement;
+  // const containerAngle = container.angle;
+  // const textCenterX = containerCoords.x + maxContainerWidth / 2 - boundTextElement.width / 2;
+  // const textCenterY = containerCoords.y + maxContainerHeight / 2 - boundTextElement.height / 2;
+
+
+  // let dx = textCenterX
+  // let dy = textCenterY
+
+  // if (textAlign === TEXT_ALIGN.LEFT) {
+  //   dx -= maxContainerWidth - boundTextElement.width;
+  // } else if (textAlign === TEXT_ALIGN.RIGHT) {
+  //   dx += maxContainerWidth - boundTextElement.width;
+  // }
+
+  // if (verticalAlign === VERTICAL_ALIGN.TOP) {
+  //   dy -= maxContainerHeight - boundTextElement.height;
+  // } else if (verticalAlign === VERTICAL_ALIGN.BOTTOM) {
+  //   dy += maxContainerHeight - boundTextElement.height;
+  // }
+
+  // const hypotenuse = Math.hypot(dx, dy);
+  // let angle = Math.atan2(dy, dx) as Radians;
+
+  // let resultX = textCenterX + hypotenuse * Math.cos(containerAngle);
+  // let resultY = textCenterY + hypotenuse * Math.sin(containerAngle);
+
+  // return { x: resultX, y: resultY };
+
   let x;
   let y;
   if (boundTextElement.verticalAlign === VERTICAL_ALIGN.TOP) {
