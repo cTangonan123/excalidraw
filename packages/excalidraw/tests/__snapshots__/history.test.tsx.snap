@@ -4748,7 +4748,7 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "strokeWidth": 2,
   "type": "rectangle",
   "updated": 1,
-  "version": 6,
+  "version": 8,
   "width": 100,
   "x": 200,
   "y": 200,
@@ -4786,7 +4786,7 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "textAlign": "left",
   "type": "text",
   "updated": 1,
-  "version": 4,
+  "version": 6,
   "verticalAlign": "top",
   "width": 80,
   "x": "241.29526",
@@ -4796,7 +4796,7 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
 
 exports[`history > multiplayer undo/redo > conflicts in bound text elements and their containers > should redraw remotely added bound text when it's container is updated through the history > [end of test] number of elements 1`] = `2`;
 
-exports[`history > multiplayer undo/redo > conflicts in bound text elements and their containers > should redraw remotely added bound text when it's container is updated through the history > [end of test] number of renders 1`] = `8`;
+exports[`history > multiplayer undo/redo > conflicts in bound text elements and their containers > should redraw remotely added bound text when it's container is updated through the history > [end of test] number of renders 1`] = `10`;
 
 exports[`history > multiplayer undo/redo > conflicts in bound text elements and their containers > should redraw remotely added bound text when it's container is updated through the history > [end of test] redo stack 1`] = `[]`;
 
@@ -4816,20 +4816,20 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
         "id0": {
           "deleted": {
             "angle": 90,
-            "version": 6,
+            "version": 8,
             "x": 200,
             "y": 200,
           },
           "inserted": {
             "angle": 0,
-            "version": 5,
+            "version": 7,
             "x": 10,
             "y": 10,
           },
         },
       },
     },
-    "id": "id5",
+    "id": "id7",
   },
 ]
 `;

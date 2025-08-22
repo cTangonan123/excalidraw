@@ -246,7 +246,6 @@ export const computeBoundTextPosition = (
   // const textCenterX = containerCoords.x + maxContainerWidth / 2 - boundTextElement.width / 2;
   // const textCenterY = containerCoords.y + maxContainerHeight / 2 - boundTextElement.height / 2;
 
-
   // let dx = textCenterX
   // let dy = textCenterY
 
@@ -270,25 +269,57 @@ export const computeBoundTextPosition = (
 
   // return { x: resultX, y: resultY };
 
-  let x;
-  let y;
-  if (boundTextElement.verticalAlign === VERTICAL_ALIGN.TOP) {
-    y = containerCoords.y;
-  } else if (boundTextElement.verticalAlign === VERTICAL_ALIGN.BOTTOM) {
-    y = containerCoords.y + (maxContainerHeight - boundTextElement.height);
-  } else {
-    y =
-      containerCoords.y +
-      (maxContainerHeight / 2 - boundTextElement.height / 2);
+  //solving for the rotation to be applied with alignment
+
+  // Improved alignment logic: align relative to center, then rotate offset
+  // grab the values for both the horizontal text align and the vertical align selected.
+  const { textAlign, verticalAlign } = boundTextElement;
+  // Grab the container's rotation angle
+  const containerAngle = container.angle;
+  // Center of the container's bounding box (inscribed rectangle)
+  // Center is the top left of the container or shape (hence the need to add container width)
+  const centerX = containerCoords.x + maxContainerWidth / 2;
+  const centerY = containerCoords.y + maxContainerHeight / 2;
+
+  // Offset from center for alignment default = 0 at center
+  // just initializing it for upcoming use
+  let offsetX = 0;
+  let offsetY = 0;
+
+  // Horizontal alignment
+  // Center is default (offset = 0)
+  if (textAlign === TEXT_ALIGN.LEFT) {
+    // add half the width of the bound text element after align left to offsetX
+    offsetX = -maxContainerWidth / 2 + boundTextElement.width / 2;
+  } else if (textAlign === TEXT_ALIGN.RIGHT) {
+    // subtract half the width of the bound text element after align right to offsetX
+    offsetX = maxContainerWidth / 2 - boundTextElement.width / 2;
   }
-  if (boundTextElement.textAlign === TEXT_ALIGN.LEFT) {
-    x = containerCoords.x;
-  } else if (boundTextElement.textAlign === TEXT_ALIGN.RIGHT) {
-    x = containerCoords.x + (maxContainerWidth - boundTextElement.width);
-  } else {
-    x =
-      containerCoords.x + (maxContainerWidth / 2 - boundTextElement.width / 2);
+
+  // Vertical alignment - same logic as horizontal alignment
+  // Center is default (offsetY = 0)
+  if (verticalAlign === VERTICAL_ALIGN.TOP) {
+    offsetY = -maxContainerHeight / 2 + boundTextElement.height / 2;
+  } else if (verticalAlign === VERTICAL_ALIGN.BOTTOM) {
+    offsetY = maxContainerHeight / 2 - boundTextElement.height / 2;
   }
+
+  //Rotation Logic
+  // position by container angle from rotation - and the offset
+  // rotatedOffsetX=offsetX⋅cos(containerAngle)−offsetY⋅sin(containerAngle)
+  // rotatedOffsetY=offsetX⋅sin(containerAngle)+offsetY⋅cos(containerAngle)
+  // rotation in 2d formula
+
+  const rotatedOffsetX =
+    offsetX * Math.cos(containerAngle) - offsetY * Math.sin(containerAngle);
+  const rotatedOffsetY =
+    offsetX * Math.sin(containerAngle) + offsetY * Math.cos(containerAngle);
+
+  // Final position after centers align - adding the text width too for centered positioning.
+  const x = centerX + rotatedOffsetX - boundTextElement.width / 2;
+  const y = centerY + rotatedOffsetY - boundTextElement.height / 2;
+
+  //final position returned
   return { x, y };
 };
 
