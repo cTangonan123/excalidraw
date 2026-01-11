@@ -30,6 +30,8 @@ import {
   isTextElement,
 } from "./typeChecks";
 
+import { getCornerRadius } from "./utils";
+
 import type { Scene } from "./Scene";
 
 import type { MaybeTransformHandleType } from "./transformHandles";
@@ -366,6 +368,12 @@ export const getContainerCoords = (container: NonDeletedExcalidrawElement) => {
     offsetX += container.width / 4;
     offsetY += container.height / 4;
   }
+
+  if (container.type === "rectangle") {
+    offsetX +=
+      getCornerRadius(Math.min(container.width, container.height), container) -
+      BOUND_TEXT_PADDING;
+  }
   return {
     x: container.x + offsetX,
     y: container.y + offsetY,
@@ -483,6 +491,14 @@ export const getBoundTextMaxWidth = (
     // The width of the largest rectangle inscribed inside a rhombus is
     // Math.round(width / 2) - https://github.com/excalidraw/excalidraw/pull/6265
     return Math.round(width / 2) - BOUND_TEXT_PADDING * 2;
+  }
+
+  if (container.type === "rectangle") {
+    return (
+      width -
+      getCornerRadius(Math.min(container.width, container.height), container) *
+        2
+    );
   }
   return width - BOUND_TEXT_PADDING * 2;
 };
