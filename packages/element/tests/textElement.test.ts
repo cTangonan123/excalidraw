@@ -1,11 +1,18 @@
 import { getLineHeight } from "@excalidraw/common";
 import { API } from "@excalidraw/excalidraw/tests/helpers/api";
 
-import { FONT_FAMILY, TEXT_ALIGN, VERTICAL_ALIGN } from "@excalidraw/common";
+import {
+  FONT_FAMILY,
+  TEXT_ALIGN,
+  VERTICAL_ALIGN,
+  ROUNDNESS,
+} from "@excalidraw/common";
 
 import {
   computeContainerDimensionForBoundText,
+  computeContainerPadding,
   getContainerCoords,
+  getContainerPadding,
   getBoundTextMaxWidth,
   getBoundTextMaxHeight,
   computeBoundTextPosition,
@@ -23,9 +30,11 @@ describe("Test measureText", () => {
         type: "ellipse",
         ...params,
       });
+      // padding.x = 5 + (200/2) * (1 - sqrt(2)/2) ≈ 34.289
+      // padding.y = 5 + (100/2) * (1 - sqrt(2)/2) ≈ 19.644
       expect(getContainerCoords(element)).toEqual({
-        x: 44.2893218813452455,
-        y: 39.64466094067262,
+        x: 10 + 5 + (200 / 2) * (1 - Math.sqrt(2) / 2),
+        y: 20 + 5 + (100 / 2) * (1 - Math.sqrt(2) / 2),
       });
     });
 
@@ -45,10 +54,126 @@ describe("Test measureText", () => {
         type: "diamond",
         ...params,
       });
+      // padding.x = 5 + 200/4 = 55, padding.y = 5 + 100/4 = 30
       expect(getContainerCoords(element)).toEqual({
         x: 65,
         y: 50,
       });
+    });
+
+    it("should compute coords correctly when rounded rectangle", () => {
+      const element = API.createElement({
+        type: "rectangle",
+        ...params,
+        roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+      });
+      // min(200, 100) = 100, adaptive radius for 100 < 128 → 100 * 0.25 = 25
+      // padding.x = max(25, 5) = 25
+      expect(getContainerCoords(element)).toEqual({
+        x: 35,
+        y: 25,
+      });
+    });
+
+    it("should compute coords correctly when large rounded rectangle", () => {
+      const element = API.createElement({
+        type: "rectangle",
+        width: 400,
+        height: 300,
+        x: 10,
+        y: 20,
+        roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+      });
+      // min(400, 300) = 300 > 128 → adaptive radius = 32
+      // padding.x = max(32, 5) = 32
+      expect(getContainerCoords(element)).toEqual({
+        x: 42,
+        y: 25,
+      });
+    });
+  });
+
+  describe("Test getContainerPadding", () => {
+    it("should return BOUND_TEXT_PADDING for sharp rectangle", () => {
+      const element = API.createElement({
+        type: "rectangle",
+        width: 200,
+        height: 100,
+        roundness: null,
+      });
+      expect(getContainerPadding(element)).toEqual({ x: 5, y: 5 });
+    });
+
+    it("should return corner radius for rounded rectangle when larger than BOUND_TEXT_PADDING", () => {
+      const element = API.createElement({
+        type: "rectangle",
+        width: 400,
+        height: 300,
+        roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+      });
+      // min(400, 300) = 300 > 128 → adaptive radius = 32
+      expect(getContainerPadding(element)).toEqual({ x: 32, y: 5 });
+    });
+
+    it("should return BOUND_TEXT_PADDING for very small rounded rectangle", () => {
+      const element = API.createElement({
+        type: "rectangle",
+        width: 16,
+        height: 12,
+        roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+      });
+      // min(16, 12) = 12 < 128 → proportional radius = 12 * 0.25 = 3
+      // max(3, 5) = 5
+      expect(getContainerPadding(element)).toEqual({ x: 5, y: 5 });
+    });
+
+    it("should return correct padding for ellipse", () => {
+      const element = API.createElement({
+        type: "ellipse",
+        width: 200,
+        height: 100,
+      });
+      expect(getContainerPadding(element)).toEqual({
+        x: 5 + (200 / 2) * (1 - Math.sqrt(2) / 2),
+        y: 5 + (100 / 2) * (1 - Math.sqrt(2) / 2),
+      });
+    });
+
+    it("should return correct padding for diamond", () => {
+      const element = API.createElement({
+        type: "diamond",
+        width: 200,
+        height: 100,
+      });
+      expect(getContainerPadding(element)).toEqual({
+        x: 5 + 200 / 4,
+        y: 5 + 100 / 4,
+      });
+    });
+
+    it("should fall back to BOUND_TEXT_PADDING for old drawings without containerPadding", () => {
+      const element = API.createElement({
+        type: "rectangle",
+        width: 400,
+        height: 300,
+        roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+      });
+      // Simulate an old drawing by removing containerPadding
+      const oldElement = { ...element, containerPadding: undefined };
+      expect(getContainerPadding(oldElement)).toEqual({ x: 5, y: 5 });
+    });
+
+    it("computeContainerPadding should always return adaptive value for rectangles", () => {
+      const element = API.createElement({
+        type: "rectangle",
+        width: 400,
+        height: 300,
+        roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+      });
+      // Simulate an old drawing by removing containerPadding
+      const oldElement = { ...element, containerPadding: undefined };
+      // computeContainerPadding ignores containerPadding and always computes
+      expect(computeContainerPadding(oldElement)).toEqual({ x: 32, y: 5 });
     });
   });
 
@@ -87,6 +212,43 @@ describe("Test measureText", () => {
         320,
       );
     });
+
+    it("should compute container width correctly for rounded rectangle", () => {
+      const element = API.createElement({
+        type: "rectangle",
+        ...params,
+        roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+      });
+      // min(178, 194) = 178 > 128 → adaptive radius = 32
+      // padding.x = max(32, 5) = 32
+      // dimension = 150 + 32 * 2 = 214
+      expect(
+        computeContainerDimensionForBoundText(
+          150,
+          element.type,
+          element,
+          "x",
+        ),
+      ).toEqual(214);
+    });
+
+    it("should compute container height correctly for rectangle with container and y axis", () => {
+      const element = API.createElement({
+        type: "rectangle",
+        ...params,
+        roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+      });
+      // Height always uses BOUND_TEXT_PADDING regardless of roundness
+      // dimension = 150 + 5 * 2 = 160
+      expect(
+        computeContainerDimensionForBoundText(
+          150,
+          element.type,
+          element,
+          "y",
+        ),
+      ).toEqual(160);
+    });
   });
 
   describe("Test getBoundTextMaxWidth", () => {
@@ -108,6 +270,31 @@ describe("Test measureText", () => {
     it("should return max width when container is diamond", () => {
       const container = API.createElement({ type: "diamond", ...params });
       expect(getBoundTextMaxWidth(container, null)).toBe(79);
+    });
+
+    it("should return max width when container is rounded rectangle", () => {
+      const container = API.createElement({
+        type: "rectangle",
+        ...params,
+        roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+      });
+      // min(178, 194) = 178 > 128 → adaptive radius = 32
+      // padding.x = max(32, 5) = 32
+      // maxWidth = 178 - 32 * 2 = 114
+      expect(getBoundTextMaxWidth(container, null)).toBe(114);
+    });
+
+    it("should return max width when container is small rounded rectangle", () => {
+      const container = API.createElement({
+        type: "rectangle",
+        width: 80,
+        height: 60,
+        roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+      });
+      // min(80, 60) = 60 < 128 → proportional radius = 60 * 0.25 = 15
+      // padding.x = max(15, 5) = 15
+      // maxWidth = 80 - 15 * 2 = 50
+      expect(getBoundTextMaxWidth(container, null)).toBe(50);
     });
   });
 

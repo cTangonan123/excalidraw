@@ -266,10 +266,14 @@ export const actionWrapTextInContainer = register({
           width: computeContainerDimensionForBoundText(
             textElement.width,
             "rectangle",
+            undefined,
+            "x",
           ),
           height: computeContainerDimensionForBoundText(
             textElement.height,
             "rectangle",
+            undefined,
+            "y",
           ),
           groupIds: textElement.groupIds,
           frameId: textElement.frameId,

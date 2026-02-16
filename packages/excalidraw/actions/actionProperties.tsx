@@ -39,6 +39,7 @@ import { newElementWith } from "@excalidraw/element";
 
 import {
   getBoundTextElement,
+  computeContainerPadding,
   redrawTextBoundingBox,
 } from "@excalidraw/element";
 
@@ -1480,16 +1481,30 @@ export const actionChangeRoundness = register<"sharp" | "round">({
           return el;
         }
 
-        return newElementWith(el, {
-          roundness:
-            value === "round"
-              ? {
-                  type: isUsingAdaptiveRadius(el.type)
-                    ? ROUNDNESS.ADAPTIVE_RADIUS
-                    : ROUNDNESS.PROPORTIONAL_RADIUS,
-                }
-              : null,
+        const newRoundness =
+          value === "round"
+            ? {
+                type: isUsingAdaptiveRadius(el.type)
+                  ? ROUNDNESS.ADAPTIVE_RADIUS
+                  : ROUNDNESS.PROPORTIONAL_RADIUS,
+              }
+            : null;
+
+        const updated = newElementWith(el, {
+          roundness: newRoundness,
         });
+
+        if (
+          updated.type === "rectangle" ||
+          updated.type === "diamond" ||
+          updated.type === "ellipse"
+        ) {
+          return newElementWith(updated, {
+            containerPadding: computeContainerPadding(updated),
+          });
+        }
+
+        return updated;
       }),
       appState: {
         ...appState,

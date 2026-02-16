@@ -37,6 +37,7 @@ import type { Scene } from "./Scene";
 import type { MaybeTransformHandleType } from "./transformHandles";
 import type {
   ElementsMap,
+  ExcalidrawArrowElement,
   ExcalidrawElement,
   ExcalidrawElementType,
   ExcalidrawTextContainer,
@@ -44,6 +45,12 @@ import type {
   ExcalidrawTextElementWithContainer,
   NonDeletedExcalidrawElement,
 } from "./types";
+
+/** Text containers that carry `containerPadding` (i.e. not arrows). */
+type PaddedTextContainer = Exclude<
+  ExcalidrawTextContainer,
+  ExcalidrawArrowElement
+>;
 
 export const redrawTextBoundingBox = (
   textElement: ExcalidrawTextElement,
@@ -110,6 +117,8 @@ export const redrawTextBoundingBox = (
       const nextHeight = computeContainerDimensionForBoundText(
         metrics.height,
         container.type,
+        container,
+        "y",
       );
       scene.mutateElement(container, { height: nextHeight });
       updateOriginalContainerCache(container.id, nextHeight);
@@ -119,8 +128,24 @@ export const redrawTextBoundingBox = (
       const nextWidth = computeContainerDimensionForBoundText(
         metrics.width,
         container.type,
+        container,
+        "x",
       );
       scene.mutateElement(container, { width: nextWidth });
+    }
+
+    // Update containerPadding after any dimension changes
+    if (!isArrowElement(container)) {
+      const textContainer = container as PaddedTextContainer;
+      const newPadding = computeContainerPadding(container);
+      if (
+        textContainer.containerPadding?.x !== newPadding.x ||
+        textContainer.containerPadding?.y !== newPadding.y
+      ) {
+        scene.mutateElement(textContainer, {
+          containerPadding: newPadding,
+        });
+      }
     }
 
     const updatedTextElement = {
@@ -189,6 +214,8 @@ export const handleBindTextResize = (
       containerHeight = computeContainerDimensionForBoundText(
         nextHeight,
         container.type,
+        container,
+        "y",
       );
 
       const diff = containerHeight - container.height;
@@ -213,6 +240,17 @@ export const handleBindTextResize = (
     });
 
     if (!isArrowElement(container)) {
+      // Update containerPadding after any dimension changes
+      const textContainer = container as PaddedTextContainer;
+      const newPadding = computeContainerPadding(container);
+      if (
+        textContainer.containerPadding?.x !== newPadding.x ||
+        textContainer.containerPadding?.y !== newPadding.y
+      ) {
+        scene.mutateElement(textContainer, {
+          containerPadding: newPadding,
+        });
+      }
       scene.mutateElement(
         textElement,
         computeBoundTextPosition(container, textElement, elementsMap),
@@ -354,29 +392,60 @@ export const getContainerCenter = (
   return { x: midSegmentMidpoint[0], y: midSegmentMidpoint[1] };
 };
 
-export const getContainerCoords = (container: NonDeletedExcalidrawElement) => {
-  let offsetX = BOUND_TEXT_PADDING;
-  let offsetY = BOUND_TEXT_PADDING;
-
+/**
+ * Computes the padding for bound text inside a container based on its
+ * current dimensions and roundness. Always returns the adaptive value.
+ * Use this when setting containerPadding on the element.
+ */
+export const computeContainerPadding = (
+  container: ExcalidrawElement,
+): { x: number; y: number } => {
   if (container.type === "ellipse") {
-    // The derivation of coordinates is explained in https://github.com/excalidraw/excalidraw/pull/6172
-    offsetX += (container.width / 2) * (1 - Math.sqrt(2) / 2);
-    offsetY += (container.height / 2) * (1 - Math.sqrt(2) / 2);
+    // The derivation is explained in https://github.com/excalidraw/excalidraw/pull/6172
+    return {
+      x: BOUND_TEXT_PADDING + (container.width / 2) * (1 - Math.sqrt(2) / 2),
+      y: BOUND_TEXT_PADDING + (container.height / 2) * (1 - Math.sqrt(2) / 2),
+    };
   }
-  // The derivation of coordinates is explained in https://github.com/excalidraw/excalidraw/pull/6265
   if (container.type === "diamond") {
-    offsetX += container.width / 4;
-    offsetY += container.height / 4;
+    // The derivation is explained in https://github.com/excalidraw/excalidraw/pull/6265
+    return {
+      x: BOUND_TEXT_PADDING + container.width / 4,
+      y: BOUND_TEXT_PADDING + container.height / 4,
+    };
   }
-
   if (container.type === "rectangle") {
-    offsetX +=
-      getCornerRadius(Math.min(container.width, container.height), container) -
-      BOUND_TEXT_PADDING;
+    return {
+      x: Math.max(
+        getCornerRadius(Math.min(container.width, container.height), container),
+        BOUND_TEXT_PADDING,
+      ),
+      y: BOUND_TEXT_PADDING,
+    };
   }
+  return { x: BOUND_TEXT_PADDING, y: BOUND_TEXT_PADDING };
+};
+
+/**
+ * Returns the padding for bound text inside a container.
+ * For new elements (those with containerPadding set), returns the stored value.
+ * For old drawings (without containerPadding), falls back to BOUND_TEXT_PADDING
+ * to preserve backward compatibility.
+ */
+export const getContainerPadding = (
+  container: ExcalidrawElement,
+): { x: number; y: number } => {
+  if ("containerPadding" in container && container.containerPadding) {
+    return container.containerPadding;
+  }
+  return { x: BOUND_TEXT_PADDING, y: BOUND_TEXT_PADDING };
+};
+
+export const getContainerCoords = (container: NonDeletedExcalidrawElement) => {
+  const padding = getContainerPadding(container);
   return {
-    x: container.x + offsetX,
-    y: container.y + offsetY,
+    x: container.x + padding.x,
+    y: container.y + padding.y,
   };
 };
 
@@ -454,6 +523,8 @@ export const isValidTextContainer = (element: {
 export const computeContainerDimensionForBoundText = (
   dimension: number,
   containerType: ExtractSetType<typeof VALID_CONTAINER_TYPES>,
+  container?: ExcalidrawElement,
+  axis: "x" | "y" = "y",
 ) => {
   dimension = Math.ceil(dimension);
   const padding = BOUND_TEXT_PADDING * 2;
@@ -466,6 +537,10 @@ export const computeContainerDimensionForBoundText = (
   }
   if (containerType === "diamond") {
     return 2 * (dimension + padding);
+  }
+  if (containerType === "rectangle" && container && axis === "x") {
+    const horizontalPadding = getContainerPadding(container).x;
+    return dimension + horizontalPadding * 2;
   }
   return dimension + padding;
 };
@@ -494,11 +569,7 @@ export const getBoundTextMaxWidth = (
   }
 
   if (container.type === "rectangle") {
-    return (
-      width -
-      getCornerRadius(Math.min(container.width, container.height), container) *
-        2
-    );
+    return width - getContainerPadding(container).x * 2;
   }
   return width - BOUND_TEXT_PADDING * 2;
 };

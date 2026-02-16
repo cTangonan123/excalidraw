@@ -22,6 +22,7 @@ import {
 } from "./bounds";
 import { newElementWith } from "./mutateElement";
 import { getBoundTextMaxWidth } from "./textElement";
+import { computeContainerPadding } from "./textElement";
 import { normalizeText, measureText } from "./textMeasurements";
 import { wrapText } from "./textWrapping";
 
@@ -123,7 +124,9 @@ const _newElementBase = <T extends ExcalidrawElement>(
   }
 
   // assign type to guard against excess properties
-  const element: Merge<ExcalidrawGenericElement, { type: T["type"] }> = {
+  const element: Merge<ExcalidrawGenericElement, { type: T["type"] }> & {
+    containerPadding?: { x: number; y: number };
+  } = {
     id: rest.id || randomId(),
     type,
     x,
@@ -151,6 +154,15 @@ const _newElementBase = <T extends ExcalidrawElement>(
     link,
     locked,
     customData: rest.customData,
+    containerPadding:
+      type === "rectangle" || type === "ellipse" || type === "diamond"
+        ? computeContainerPadding({
+            type,
+            width,
+            height,
+            roundness,
+          } as ExcalidrawGenericElement)
+        : undefined,
   };
   return element;
 };

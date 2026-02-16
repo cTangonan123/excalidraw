@@ -27,6 +27,7 @@ import {
   getBoundTextMaxHeight,
   getBoundTextMaxWidth,
   computeContainerDimensionForBoundText,
+  computeContainerPadding,
   computeBoundTextPosition,
   getBoundTextElement,
 } from "@excalidraw/element";
@@ -44,7 +45,14 @@ import type {
   ExcalidrawLinearElement,
   ExcalidrawTextElementWithContainer,
   ExcalidrawTextElement,
+  ExcalidrawTextContainer,
+  ExcalidrawArrowElement,
 } from "@excalidraw/element/types";
+
+type PaddedTextContainer = Exclude<
+  ExcalidrawTextContainer,
+  ExcalidrawArrowElement
+>;
 
 import { actionSaveToActiveFile } from "../actions";
 
@@ -205,9 +213,19 @@ export const textWysiwyg = ({
           const targetContainerHeight = computeContainerDimensionForBoundText(
             height,
             container.type,
+            container,
+            "y",
           );
 
           app.scene.mutateElement(container, { height: targetContainerHeight });
+          // Update containerPadding after dimension change so next
+          // updateWysiwygStyle call positions the textarea correctly
+          app.scene.mutateElement(
+            container as PaddedTextContainer,
+            {
+              containerPadding: computeContainerPadding(container),
+            },
+          );
           return;
         } else if (
           // autoshrink container height until original container height
@@ -219,8 +237,17 @@ export const textWysiwyg = ({
           const targetContainerHeight = computeContainerDimensionForBoundText(
             height,
             container.type,
+            container,
+            "y",
           );
           app.scene.mutateElement(container, { height: targetContainerHeight });
+          // Update containerPadding after dimension change
+          app.scene.mutateElement(
+            container as PaddedTextContainer,
+            {
+              containerPadding: computeContainerPadding(container),
+            },
+          );
         } else {
           const { x, y } = computeBoundTextPosition(
             container,

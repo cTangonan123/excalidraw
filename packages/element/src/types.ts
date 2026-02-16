@@ -85,17 +85,30 @@ export type ExcalidrawSelectionElement = _ExcalidrawElementBase & {
   type: "selection";
 };
 
-export type ExcalidrawRectangleElement = _ExcalidrawElementBase & {
-  type: "rectangle";
-};
+export type ExcalidrawRectangleElement = _ExcalidrawElementBase &
+  Readonly<{
+    type: "rectangle";
+    /**
+     * Dynamically computed padding for bound text inside this container.
+     * Horizontal padding adapts to corner radius (min BOUND_TEXT_PADDING).
+     * Absent on old drawings — consumers fall back to BOUND_TEXT_PADDING.
+     */
+    containerPadding?: { x: number; y: number };
+  }>;
 
-export type ExcalidrawDiamondElement = _ExcalidrawElementBase & {
-  type: "diamond";
-};
+export type ExcalidrawDiamondElement = _ExcalidrawElementBase &
+  Readonly<{
+    type: "diamond";
+    /** @see ExcalidrawRectangleElement.containerPadding */
+    containerPadding?: { x: number; y: number };
+  }>;
 
-export type ExcalidrawEllipseElement = _ExcalidrawElementBase & {
-  type: "ellipse";
-};
+export type ExcalidrawEllipseElement = _ExcalidrawElementBase &
+  Readonly<{
+    type: "ellipse";
+    /** @see ExcalidrawRectangleElement.containerPadding */
+    containerPadding?: { x: number; y: number };
+  }>;
 
 export type ExcalidrawEmbeddableElement = _ExcalidrawElementBase &
   Readonly<{
