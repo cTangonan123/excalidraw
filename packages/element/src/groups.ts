@@ -415,27 +415,26 @@ export const getSelectedElementsByGroup = (
   elementsMap: ElementsMap,
   appState: Readonly<Pick<AppState, "selectedGroupIds">>,
 ): ExcalidrawElement[][] => {
-  const groups: Map<string, ExcalidrawElement[]> = new Map();
-  const elements: Map<string, ExcalidrawElement[]> = new Map();
+  const bucketMap: Map<string, ExcalidrawElement[]> = new Map();
   const selectedGroupIds = getSelectedGroupIds(appState);
   const isSingleSelectedGroupCase =
     selectedGroupIds.length === 1 &&
     selectedElements.every((element) =>
       element.groupIds.includes(selectedGroupIds[0]),
     );
+
   selectedElements.forEach((element) => {
-    // skip dependent boundTextElements, they are incl. at the end of each iteration
+    // skip dependent boundTextElements, they are appended at the end
     if (isBoundToContainer(element)) {
       return;
     }
-    let bucketType: "group" | "element";
     let bucketKey: string;
     const selectedGroupId = getSelectedGroupIdForElement(
       element,
       appState.selectedGroupIds,
     );
+
     if (!selectedGroupId) {
-      bucketType = "element";
       bucketKey = element.id;
     } else {
       // if only one group is selected, grouping is based on inner hierarchy
@@ -443,23 +442,16 @@ export const getSelectedElementsByGroup = (
         ? element.groupIds.indexOf(selectedGroupId) - 1
         : element.groupIds.indexOf(selectedGroupId);
 
-      if (keyIndex < 0) {
-        bucketType = "element";
-        bucketKey = element.id;
-      } else {
-        bucketType = "group";
-        bucketKey = element.groupIds[keyIndex];
-      }
+      // edge case: single selected group where element is non member of inner group
+      bucketKey = keyIndex < 0 ? element.id : element.groupIds[keyIndex];
     }
-
-    const bucketMap = bucketType === "group" ? groups : elements;
-    const currentBucketMembers = bucketMap.get(bucketKey) || [];
+    const bucket = bucketMap.get(bucketKey) ?? [];
     const boundTextElement = getBoundTextElement(element, elementsMap);
     bucketMap.set(bucketKey, [
-      ...currentBucketMembers,
+      ...bucket,
       element,
       ...(boundTextElement ? [boundTextElement] : []),
     ]);
   });
-  return [...groups.values(), ...elements.values()];
+  return [...bucketMap.values()];
 };
