@@ -17,10 +17,14 @@ export class AppSelection {
 
   handlePointerMove = () => {};
 
+  // handles group/frame collision detection and filtering throughout
+  // pointerDown/Move/Up lifecycle.
+  // when direct hit elements are preferred, like children of
+  // previously selected frames, use preferredHitElements.
   public normalizeSelectionState = (
     prevState: AppState,
     selectedElementIds: AppState["selectedElementIds"],
-    preferredHitElement?: NonDeletedExcalidrawElement,
+    preferredHitElements: readonly NonDeletedExcalidrawElement[] = [],
   ) => {
     const elements = this.app.scene.getNonDeletedElements();
     const elementsMap = this.app.scene.getNonDeletedElementsMap();
@@ -68,18 +72,6 @@ export class AppSelection {
         )
       : candidates;
 
-    let frameConflictId: string | null;
-    if (
-      preferredHitElement &&
-      selectedElementIds[preferredHitElement.id] &&
-      preferredHitElement.frameId &&
-      selectedElementIds[preferredHitElement.frameId]
-    ) {
-      frameConflictId = preferredHitElement.frameId;
-    } else {
-      frameConflictId = null;
-    }
-
     const nextSelectedCandidateIds = new Set<string>();
     const selectedFrameIds = new Set<string>();
 
@@ -91,8 +83,23 @@ export class AppSelection {
       }
     }
 
-    // remove conflicting frame if it exists
-    if (frameConflictId) {
+    const preferredHitElementIds = new Set(
+      preferredHitElements.map((element) => element.id),
+    );
+    const frameConflictIds = new Set<string>();
+
+    for (const element of preferredHitElements) {
+      if (
+        nextSelectedCandidateIds.has(element.id) &&
+        element.frameId &&
+        selectedFrameIds.has(element.frameId) &&
+        !preferredHitElementIds.has(element.frameId)
+      ) {
+        frameConflictIds.add(element.frameId);
+      }
+    }
+
+    for (const frameConflictId of frameConflictIds) {
       nextSelectedCandidateIds.delete(frameConflictId);
       selectedFrameIds.delete(frameConflictId);
     }

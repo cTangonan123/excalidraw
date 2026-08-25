@@ -11211,6 +11211,7 @@ class App extends React.Component<AppProps, AppState> {
             const nextSelectionState = this.selection.normalizeSelectionState(
               prevState,
               nextSelectedElementIds,
+              elementsWithinSelection,
             );
             const normalizedSelectedElementIds =
               nextSelectionState.selectedElementIds;
@@ -12069,7 +12070,7 @@ class App extends React.Component<AppProps, AppState> {
                 ...this.selection.normalizeSelectionState(
                   prevState,
                   nextSelectedElementIds,
-                  hitElement,
+                  [hitElement],
                 ),
                 showHyperlinkPopup:
                   hitElement.link || isEmbeddableElement(hitElement)
