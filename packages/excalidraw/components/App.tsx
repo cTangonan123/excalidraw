@@ -436,6 +436,7 @@ import { AppBucketFill } from "./App.bucketFill";
 import { AppCursor } from "./App.cursor";
 import { AppDrawShape } from "./App.drawshape";
 import { AppFlowchart } from "./App.flowchart";
+import { AppSelection } from "./App.selection";
 import { AppViewport, RIGHT_SIDEBAR_WIDTH } from "./App.viewport";
 import BraveMeasureTextError from "./BraveMeasureTextError";
 import { ContextMenu, CONTEXT_MENU_SEPARATOR } from "./ContextMenu";
@@ -686,6 +687,7 @@ class App extends React.Component<AppProps, AppState> {
   public flowchart: AppFlowchart = new AppFlowchart(this);
   public cursor: AppCursor = new AppCursor(this);
   public arrowText: AppArrowText = new AppArrowText(this);
+  public selection: AppSelection = new AppSelection(this);
   public viewport: AppViewport = new AppViewport(this, {
     getContainer: () => this.excalidrawContainerRef.current,
     getStylesPanelMode: () => this.stylesPanelMode,
@@ -8629,76 +8631,12 @@ class App extends React.Component<AppProps, AppState> {
             [pointerDownState.hit.element!.id]: true,
           };
 
-          const previouslySelectedElements: ExcalidrawElement[] = [];
-
-          Object.keys(prevState.selectedElementIds).forEach((id) => {
-            const element = this.scene.getElement(id);
-            element && previouslySelectedElements.push(element);
-          });
-
           const hitElement = pointerDownState.hit.element!;
 
-          // if hitElement is frame-like, deselect all of its elements
-          // if they are selected
-          if (isFrameLikeElement(hitElement)) {
-            getFrameChildren(previouslySelectedElements, hitElement.id).forEach(
-              (element) => {
-                delete nextSelectedElementIds[element.id];
-              },
-            );
-          } else if (hitElement.frameId) {
-            // if hitElement is in a frame and its frame has been selected
-            // disable selection for the given element
-            if (nextSelectedElementIds[hitElement.frameId]) {
-              delete nextSelectedElementIds[hitElement.id];
-            }
-          } else {
-            // hitElement is neither a frame nor an element in a frame
-            // but since hitElement could be in a group with some frames
-            // this means selecting hitElement will have the frames selected as well
-            // because we want to keep the invariant:
-            // - frames and their elements are not selected at the same time
-            // we deselect elements in those frames that were previously selected
-
-            const groupIds = hitElement.groupIds;
-            const framesInGroups = new Set(
-              groupIds
-                .flatMap((gid) =>
-                  getElementsInGroup(this.scene.getNonDeletedElements(), gid),
-                )
-                .filter((element) => isFrameLikeElement(element))
-                .map((frame) => frame.id),
-            );
-
-            if (framesInGroups.size > 0) {
-              previouslySelectedElements.forEach((element) => {
-                if (element.frameId && framesInGroups.has(element.frameId)) {
-                  // deselect element and groups containing the element
-                  delete nextSelectedElementIds[element.id];
-                  element.groupIds
-                    .flatMap((gid) =>
-                      getElementsInGroup(
-                        this.scene.getNonDeletedElements(),
-                        gid,
-                      ),
-                    )
-                    .forEach((element) => {
-                      delete nextSelectedElementIds[element.id];
-                    });
-                }
-              });
-            }
-          }
-
           return {
-            ...selectGroupsForSelectedElements(
-              {
-                editingGroupId: prevState.editingGroupId,
-                selectedElementIds: nextSelectedElementIds,
-              },
-              this.scene.getNonDeletedElements(),
+            ...this.selection.normalizeSelectionState(
               prevState,
-              this,
+              nextSelectedElementIds,
             ),
             showHyperlinkPopup:
               hitElement.link || isEmbeddableElement(hitElement)
@@ -9556,72 +9494,6 @@ class App extends React.Component<AppProps, AppState> {
                   [hitElement.id]: true,
                 };
 
-                const previouslySelectedElements: ExcalidrawElement[] = [];
-
-                Object.keys(prevState.selectedElementIds).forEach((id) => {
-                  const element = this.scene.getElement(id);
-                  element && previouslySelectedElements.push(element);
-                });
-
-                // if hitElement is frame-like, deselect all of its elements
-                // if they are selected
-                if (isFrameLikeElement(hitElement)) {
-                  getFrameChildren(
-                    previouslySelectedElements,
-                    hitElement.id,
-                  ).forEach((element) => {
-                    delete nextSelectedElementIds[element.id];
-                  });
-                } else if (hitElement.frameId) {
-                  // if hitElement is in a frame and its frame has been selected
-                  // disable selection for the given element
-                  if (nextSelectedElementIds[hitElement.frameId]) {
-                    delete nextSelectedElementIds[hitElement.id];
-                  }
-                } else {
-                  // hitElement is neither a frame nor an element in a frame
-                  // but since hitElement could be in a group with some frames
-                  // this means selecting hitElement will have the frames selected as well
-                  // because we want to keep the invariant:
-                  // - frames and their elements are not selected at the same time
-                  // we deselect elements in those frames that were previously selected
-
-                  const groupIds = hitElement.groupIds;
-                  const framesInGroups = new Set(
-                    groupIds
-                      .flatMap((gid) =>
-                        getElementsInGroup(
-                          this.scene.getNonDeletedElements(),
-                          gid,
-                        ),
-                      )
-                      .filter((element) => isFrameLikeElement(element))
-                      .map((frame) => frame.id),
-                  );
-
-                  if (framesInGroups.size > 0) {
-                    previouslySelectedElements.forEach((element) => {
-                      if (
-                        element.frameId &&
-                        framesInGroups.has(element.frameId)
-                      ) {
-                        // deselect element and groups containing the element
-                        delete nextSelectedElementIds[element.id];
-                        element.groupIds
-                          .flatMap((gid) =>
-                            getElementsInGroup(
-                              this.scene.getNonDeletedElements(),
-                              gid,
-                            ),
-                          )
-                          .forEach((element) => {
-                            delete nextSelectedElementIds[element.id];
-                          });
-                      }
-                    });
-                  }
-                }
-
                 // Finally, in shape selection mode, we'd like to
                 // keep only one shape or group selected at a time.
                 // This means, if the hitElement is a different shape or group
@@ -9640,14 +9512,9 @@ class App extends React.Component<AppProps, AppState> {
                 }
 
                 return {
-                  ...selectGroupsForSelectedElements(
-                    {
-                      editingGroupId: prevState.editingGroupId,
-                      selectedElementIds: nextSelectedElementIds,
-                    },
-                    this.scene.getNonDeletedElements(),
+                  ...this.selection.normalizeSelectionState(
                     prevState,
-                    this,
+                    nextSelectedElementIds,
                   ),
                   showHyperlinkPopup:
                     hitElement.link || isEmbeddableElement(hitElement)
@@ -12182,12 +12049,7 @@ class App extends React.Component<AppProps, AppState> {
                 };
               });
             }
-          } else if (
-            hitElement.frameId &&
-            this.state.selectedElementIds[hitElement.frameId]
-          ) {
-            // when hitElement is part of a selected frame, deselect the frame
-            // to avoid frame and containing elements selected simultaneously
+          } else {
             this.setState((prevState) => {
               const nextSelectedElementIds: {
                 [id: string]: true;
@@ -12195,27 +12057,12 @@ class App extends React.Component<AppProps, AppState> {
                 ...prevState.selectedElementIds,
                 [hitElement.id]: true,
               };
-              // deselect the frame
-              delete nextSelectedElementIds[hitElement.frameId!];
-
-              // deselect groups containing the frame
-              (this.scene.getElement(hitElement.frameId!)?.groupIds ?? [])
-                .flatMap((gid) =>
-                  getElementsInGroup(this.scene.getNonDeletedElements(), gid),
-                )
-                .forEach((element) => {
-                  delete nextSelectedElementIds[element.id];
-                });
 
               return {
-                ...selectGroupsForSelectedElements(
-                  {
-                    editingGroupId: prevState.editingGroupId,
-                    selectedElementIds: nextSelectedElementIds,
-                  },
-                  this.scene.getNonDeletedElements(),
+                ...this.selection.normalizeSelectionState(
                   prevState,
-                  this,
+                  nextSelectedElementIds,
+                  hitElement,
                 ),
                 showHyperlinkPopup:
                   hitElement.link || isEmbeddableElement(hitElement)
@@ -12223,17 +12070,6 @@ class App extends React.Component<AppProps, AppState> {
                     : false,
               };
             });
-          } else {
-            // add element to selection while keeping prev elements selected
-            this.setState((_prevState) => ({
-              selectedElementIds: makeNextSelectedElementIds(
-                {
-                  ..._prevState.selectedElementIds,
-                  [hitElement!.id]: true,
-                },
-                _prevState,
-              ),
-            }));
           }
         } else {
           this.setState((prevState) => ({

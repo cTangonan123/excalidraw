@@ -17,7 +17,7 @@ export class AppSelection {
 
   handlePointerMove = () => {};
 
-  private normalizeSelectionState = (
+  public normalizeSelectionState = (
     prevState: AppState,
     selectedElementIds: AppState["selectedElementIds"],
     preferredHitElement?: NonDeletedExcalidrawElement,
