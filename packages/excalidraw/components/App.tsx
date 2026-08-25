@@ -11205,29 +11205,36 @@ class App extends React.Component<AppProps, AppState> {
               ? { ...prevState, selectedGroupIds: {}, editingGroupId: null }
               : prevState;
 
+            // while frame collision detection is embedded in getElementsWithinSelection,
+            // tied to the bounds of the current selectionElement it does not cover previously
+            // selected elements, where frame collision can occur.
+            const nextSelectionState = this.selection.normalizeSelectionState(
+              prevState,
+              nextSelectedElementIds,
+            );
+            const normalizedSelectedElementIds =
+              nextSelectionState.selectedElementIds;
+            const nextSelectedElement =
+              elementsWithinSelection.length === 1 &&
+              Object.keys(normalizedSelectedElementIds).length === 1 &&
+              normalizedSelectedElementIds[elementsWithinSelection[0].id]
+                ? elementsWithinSelection[0]
+                : null;
+
             return {
-              ...selectGroupsForSelectedElements(
-                {
-                  editingGroupId: prevState.editingGroupId,
-                  selectedElementIds: nextSelectedElementIds,
-                },
-                this.scene.getNonDeletedElements(),
-                prevState,
-                this,
-              ),
+              ...nextSelectionState,
               // select linear element only when we haven't box-selected anything else
               selectedLinearElement:
-                elementsWithinSelection.length === 1 &&
-                isLinearElement(elementsWithinSelection[0])
+                nextSelectedElement && isLinearElement(nextSelectedElement)
                   ? new LinearElementEditor(
-                      elementsWithinSelection[0],
+                      nextSelectedElement,
                       this.scene.getNonDeletedElementsMap(),
                     )
                   : null,
               showHyperlinkPopup:
-                elementsWithinSelection.length === 1 &&
-                (elementsWithinSelection[0].link ||
-                  isEmbeddableElement(elementsWithinSelection[0]))
+                nextSelectedElement &&
+                (nextSelectedElement.link ||
+                  isEmbeddableElement(nextSelectedElement))
                   ? "info"
                   : false,
             };
