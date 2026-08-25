@@ -1,6 +1,6 @@
 import {
   isFrameLikeElement,
-  selectGroupsForSelectedElements,
+  makeNextSelectedElementIds,
 } from "@excalidraw/element";
 
 import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
@@ -40,27 +40,16 @@ export class AppSelection {
     );
 
     // track all expanded groups from initial candidates
-    // NOTE: extract as a method or function
     const targetGroupIds = new Set<string>();
     for (const element of candidates) {
-      if (!element.groupIds.length) {
-        continue;
+      const targetGroupId = this.getSelectableGroupId(
+        element,
+        prevState.editingGroupId,
+      );
+
+      if (targetGroupId) {
+        targetGroupIds.add(targetGroupId);
       }
-
-      const editingGroupIndex = prevState.editingGroupId
-        ? element.groupIds.indexOf(prevState.editingGroupId)
-        : -1;
-
-      // element is immediately selectable
-      if (editingGroupIndex === 0) {
-        continue;
-      }
-
-      const targetGroupId =
-        editingGroupIndex > 0
-          ? element.groupIds[editingGroupIndex - 1]
-          : element.groupIds[element.groupIds.length - 1];
-      targetGroupIds.add(targetGroupId);
     }
 
     // iterate in order, expanding all possible grouped elements
@@ -112,48 +101,102 @@ export class AppSelection {
         nextSelectedCandidateIds.delete(element.id);
       }
       if (!nextSelectedCandidateIds.has(element.id)) {
-        const editingGroupIndex = prevState.editingGroupId
-          ? element.groupIds.indexOf(prevState.editingGroupId)
-          : -1;
+        const excludedGroupId = this.getSelectableGroupId(
+          element,
+          prevState.editingGroupId,
+        );
 
-        if (editingGroupIndex === 0) {
-          continue;
-        }
-
-        const excludedGroupIndex =
-          editingGroupIndex > 0
-            ? editingGroupIndex - 1
-            : element.groupIds.length - 1;
-        const excludedGroupId = element.groupIds[excludedGroupIndex];
         if (excludedGroupId) {
           excludedGroupIds.add(excludedGroupId);
         }
       }
     }
 
-    const normalizedSelectedElementIds = projectedCandidates.reduce<
-      Record<string, true>
-    >((selectedElementIds, element) => {
+    const normalizedSelectedElementIds: Record<string, true> = {};
+    const selectedGroupIds: AppState["selectedGroupIds"] = {};
+
+    // of the possible elements, check to ensure they aren't members
+    // of the excluded groups, and compile selectedGroupIds
+    for (const element of projectedCandidates) {
       if (
         nextSelectedCandidateIds.has(element.id) &&
         !element.groupIds.some((groupId) => excludedGroupIds.has(groupId))
       ) {
-        selectedElementIds[element.id] = true;
+        normalizedSelectedElementIds[element.id] = true;
+
+        const selectedGroupId = this.getSelectableGroupId(
+          element,
+          prevState.editingGroupId,
+        );
+
+        if (selectedGroupId) {
+          selectedGroupIds[selectedGroupId] = true;
+        }
+      }
+    }
+
+    // expand groups that remain selected, post frame/group handling
+    // to ensure member count of any selectedGroupId is > 1
+    // carry over from selectGroupsForSelectedElements.
+    const groupMemberCounts = new Map<string, number>();
+
+    if (Object.keys(selectedGroupIds).length) {
+      for (const element of elements) {
+        const selectedGroupId = element.groupIds.find(
+          (groupId) => selectedGroupIds[groupId],
+        );
+
+        if (selectedGroupId) {
+          normalizedSelectedElementIds[element.id] = true;
+          groupMemberCounts.set(
+            selectedGroupId,
+            (groupMemberCounts.get(selectedGroupId) ?? 0) + 1,
+          );
+        }
       }
 
-      return selectedElementIds;
-    }, {});
+      for (const selectedGroupId of Object.keys(selectedGroupIds)) {
+        if (groupMemberCounts.get(selectedGroupId) === 1) {
+          selectedGroupIds[selectedGroupId] = false;
+        }
+      }
+    }
 
-    const nextSelectionState = selectGroupsForSelectedElements(
-      {
-        editingGroupId: prevState.editingGroupId,
-        selectedElementIds: normalizedSelectedElementIds,
-      },
-      elements,
+    const nextSelectedElementIds = makeNextSelectedElementIds(
+      normalizedSelectedElementIds,
       prevState,
-      this.app,
     );
 
-    return nextSelectionState;
+    return {
+      editingGroupId: Object.keys(nextSelectedElementIds).length
+        ? prevState.editingGroupId
+        : null,
+      selectedGroupIds,
+      selectedElementIds: nextSelectedElementIds,
+    };
   };
+
+  // ref in https://github.com/excalidraw/excalidraw/pull/11234#issuecomment-4387654451
+  // temp for now as it could live in either selection.ts or groups.ts and could be reused in other areas?
+  private getSelectableGroupId(
+    element: NonDeletedExcalidrawElement,
+    editingGroupId: AppState["editingGroupId"],
+  ): string | null {
+    if (!element.groupIds.length) {
+      return null;
+    }
+
+    const editingGroupIndex = editingGroupId
+      ? element.groupIds.indexOf(editingGroupId)
+      : -1;
+
+    // element is directly selectable inside the editing group
+    if (editingGroupIndex === 0) {
+      return null;
+    }
+
+    return editingGroupIndex > 0
+      ? element.groupIds[editingGroupIndex - 1]
+      : element.groupIds[element.groupIds.length - 1];
+  }
 }
