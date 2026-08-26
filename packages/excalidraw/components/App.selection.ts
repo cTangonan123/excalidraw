@@ -52,14 +52,32 @@ export class AppSelection {
       }
     }
 
-    // iterate in order, expanding all possible grouped elements
-    const projectedCandidates = targetGroupIds.size
-      ? elements.filter(
-          (element) =>
-            selectedElementIds[element.id] ||
-            element.groupIds.some((groupId) => targetGroupIds.has(groupId)),
-        )
-      : candidates;
+    // array of all possible elements after group expansion
+    const projectedCandidates: NonDeletedExcalidrawElement[] = [];
+    const groups = new Map<string, string[]>();
+
+    if (targetGroupIds.size) {
+      for (const element of elements) {
+        for (const groupId of element.groupIds) {
+          const elementIds = groups.get(groupId);
+
+          if (elementIds) {
+            elementIds.push(element.id);
+          } else {
+            groups.set(groupId, [element.id]);
+          }
+        }
+
+        if (
+          selectedElementIds[element.id] ||
+          element.groupIds.some((groupId) => targetGroupIds.has(groupId))
+        ) {
+          projectedCandidates.push(element);
+        }
+      }
+    } else {
+      projectedCandidates.push(...candidates);
+    }
 
     const nextSelectedCandidateIds = new Set<string>();
     const selectedFrameIds = new Set<string>();
@@ -140,13 +158,16 @@ export class AppSelection {
     // carry over from selectGroupsForSelectedElements.
     const groupMemberCounts = new Map<string, number>();
 
-    if (Object.keys(selectedGroupIds).length) {
-      for (const element of elements) {
-        const selectedGroupId = element.groupIds.find(
+    for (const selectedGroupId of Object.keys(selectedGroupIds)) {
+      const elementIds = groups.get(selectedGroupId) ?? [];
+
+      for (const elementId of elementIds) {
+        const element = elementsMap.get(elementId);
+        const firstSelectedGroupId = element?.groupIds.find(
           (groupId) => selectedGroupIds[groupId],
         );
 
-        if (selectedGroupId) {
+        if (element && firstSelectedGroupId === selectedGroupId) {
           normalizedSelectedElementIds[element.id] = true;
           groupMemberCounts.set(
             selectedGroupId,
@@ -154,11 +175,11 @@ export class AppSelection {
           );
         }
       }
+    }
 
-      for (const selectedGroupId of Object.keys(selectedGroupIds)) {
-        if (groupMemberCounts.get(selectedGroupId) === 1) {
-          selectedGroupIds[selectedGroupId] = false;
-        }
+    for (const selectedGroupId of Object.keys(selectedGroupIds)) {
+      if (groupMemberCounts.get(selectedGroupId) === 1) {
+        selectedGroupIds[selectedGroupId] = false;
       }
     }
 
@@ -177,7 +198,7 @@ export class AppSelection {
   };
 
   // ref in https://github.com/excalidraw/excalidraw/pull/11234#issuecomment-4387654451
-  // temp for now as it could live in either selection.ts or groups.ts and could be reused in other areas?
+  // could live in either selection.ts or groups.ts and could be reused in other areas?
   private getSelectableGroupId(
     element: NonDeletedExcalidrawElement,
     editingGroupId: AppState["editingGroupId"],
