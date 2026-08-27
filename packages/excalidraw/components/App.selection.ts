@@ -39,8 +39,19 @@ export class AppSelection {
       [],
     );
 
-    // track all expanded groups from initial candidates
+    // early return if no candidates
+    if (!candidates.length) {
+      return {
+        editingGroupId: null,
+        selectedGroupIds: {},
+        selectedElementIds: makeNextSelectedElementIds({}, prevState),
+      };
+    }
+
+    // track all expandable groups and directly selected frames from initial candidates
     const targetGroupIds = new Set<string>();
+    const selectedFrameIds = new Set<string>();
+
     for (const element of candidates) {
       const targetGroupId = this.getSelectableGroupId(
         element,
@@ -50,6 +61,33 @@ export class AppSelection {
       if (targetGroupId) {
         targetGroupIds.add(targetGroupId);
       }
+
+      if (isFrameLikeElement(element)) {
+        selectedFrameIds.add(element.id);
+      }
+    }
+
+    const hasFrameChildConflict = candidates.some(
+      (element) => element.frameId && selectedFrameIds.has(element.frameId),
+    );
+
+    // if neither groups nor frames have been selected we can assume
+    // that group projection or frame conflict resolution is needed.
+    if (
+      !targetGroupIds.size &&
+      !hasFrameChildConflict &&
+      candidates.length === Object.keys(selectedElementIds).length
+    ) {
+      const nextSelectedElementIds = makeNextSelectedElementIds(
+        selectedElementIds,
+        prevState,
+      );
+
+      return {
+        editingGroupId: prevState.editingGroupId,
+        selectedGroupIds: {},
+        selectedElementIds: nextSelectedElementIds,
+      };
     }
 
     // array of all possible elements after group expansion
@@ -80,7 +118,6 @@ export class AppSelection {
     }
 
     const nextSelectedCandidateIds = new Set<string>();
-    const selectedFrameIds = new Set<string>();
 
     // find all possible frames from the projected candidates
     for (const element of projectedCandidates) {
