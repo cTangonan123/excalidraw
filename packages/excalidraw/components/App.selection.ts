@@ -72,7 +72,7 @@ export class AppSelection {
     );
 
     // if neither groups nor frames have been selected we can assume
-    // that group projection or frame conflict resolution is needed.
+    // that group projection or frame conflict resolution is not needed.
     if (
       !targetGroupIds.size &&
       !hasFrameChildConflict &&
@@ -127,6 +127,19 @@ export class AppSelection {
       }
     }
 
+    const hasProjectedFrameChildConflict = projectedCandidates.some(
+      (element) => element.frameId && selectedFrameIds.has(element.frameId),
+    );
+
+    // at this point if frame conflicts don't exist we can skip straight to group selection
+    if (!hasProjectedFrameChildConflict) {
+      return this.finalizeGroupSelection(
+        prevState,
+        projectedCandidates,
+        groups,
+      );
+    }
+
     const preferredHitElementIds = new Set(
       preferredHitElements.map((element) => element.id),
     );
@@ -143,6 +156,7 @@ export class AppSelection {
       }
     }
 
+    // remove violating frames from selection
     for (const frameConflictId of frameConflictIds) {
       nextSelectedCandidateIds.delete(frameConflictId);
       selectedFrameIds.delete(frameConflictId);
@@ -167,27 +181,54 @@ export class AppSelection {
       }
     }
 
+    return this.finalizeGroupSelection(
+      prevState,
+      projectedCandidates.filter(
+        (element) =>
+          nextSelectedCandidateIds.has(element.id) &&
+          !element.groupIds.some((groupId) => excludedGroupIds.has(groupId)),
+      ),
+      groups,
+    );
+  };
+
+  private finalizeGroupSelection(
+    prevState: AppState,
+    projectedCandidates: readonly NonDeletedExcalidrawElement[],
+    groups: ReadonlyMap<string, readonly string[]>,
+  ) {
+    const elementsMap = this.app.scene.getNonDeletedElementsMap();
     const normalizedSelectedElementIds: Record<string, true> = {};
     const selectedGroupIds: AppState["selectedGroupIds"] = {};
 
     // of the possible elements, check to ensure they aren't members
     // of the excluded groups, and compile selectedGroupIds
     for (const element of projectedCandidates) {
-      if (
-        nextSelectedCandidateIds.has(element.id) &&
-        !element.groupIds.some((groupId) => excludedGroupIds.has(groupId))
-      ) {
-        normalizedSelectedElementIds[element.id] = true;
+      normalizedSelectedElementIds[element.id] = true;
 
-        const selectedGroupId = this.getSelectableGroupId(
-          element,
-          prevState.editingGroupId,
-        );
+      const selectedGroupId = this.getSelectableGroupId(
+        element,
+        prevState.editingGroupId,
+      );
 
-        if (selectedGroupId) {
-          selectedGroupIds[selectedGroupId] = true;
-        }
+      if (selectedGroupId) {
+        selectedGroupIds[selectedGroupId] = true;
       }
+    }
+
+    if (!Object.keys(selectedGroupIds).length) {
+      const nextSelectedElementIds = makeNextSelectedElementIds(
+        normalizedSelectedElementIds,
+        prevState,
+      );
+
+      return {
+        editingGroupId: Object.keys(nextSelectedElementIds).length
+          ? prevState.editingGroupId
+          : null,
+        selectedGroupIds,
+        selectedElementIds: nextSelectedElementIds,
+      };
     }
 
     // expand groups that remain selected, post frame/group handling
@@ -215,7 +256,9 @@ export class AppSelection {
     }
 
     for (const selectedGroupId of Object.keys(selectedGroupIds)) {
-      if (groupMemberCounts.get(selectedGroupId) === 1) {
+      const memberCount = groupMemberCounts.get(selectedGroupId) ?? 0;
+
+      if (memberCount < 2) {
         selectedGroupIds[selectedGroupId] = false;
       }
     }
@@ -232,7 +275,7 @@ export class AppSelection {
       selectedGroupIds,
       selectedElementIds: nextSelectedElementIds,
     };
-  };
+  }
 
   // ref in https://github.com/excalidraw/excalidraw/pull/11234#issuecomment-4387654451
   // could live in either selection.ts or groups.ts and could be reused in other areas?
