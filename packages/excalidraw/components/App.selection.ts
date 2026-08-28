@@ -48,8 +48,9 @@ export class AppSelection {
       };
     }
 
-    // track all expandable groups and directly selected frames from initial candidates
+    // Track possible groupIds standalone elements and directly selected frames.
     const targetGroupIds = new Set<string>();
+    const standaloneCandidateIds = new Set<string>();
     const selectedFrameIds = new Set<string>();
 
     for (const element of candidates) {
@@ -60,6 +61,8 @@ export class AppSelection {
 
       if (targetGroupId) {
         targetGroupIds.add(targetGroupId);
+      } else {
+        standaloneCandidateIds.add(element.id);
       }
 
       if (isFrameLikeElement(element)) {
@@ -107,7 +110,7 @@ export class AppSelection {
         }
 
         if (
-          selectedElementIds[element.id] ||
+          standaloneCandidateIds.has(element.id) ||
           element.groupIds.some((groupId) => targetGroupIds.has(groupId))
         ) {
           projectedCandidates.push(element);
@@ -135,7 +138,9 @@ export class AppSelection {
     if (!hasProjectedFrameChildConflict) {
       return this.finalizeGroupSelection(
         prevState,
-        projectedCandidates,
+        nextSelectedCandidateIds,
+        standaloneCandidateIds,
+        targetGroupIds,
         groups,
       );
     }
@@ -162,104 +167,52 @@ export class AppSelection {
       selectedFrameIds.delete(frameConflictId);
     }
 
-    const excludedGroupIds = new Set<string>();
-
-    // filter frame child collision and possible excluded groups
+    // filter frame child collisions. Group atomicity is handled during
+    // finalization using the groups chosen from the original candidates.
     for (const element of projectedCandidates) {
       if (element.frameId && selectedFrameIds.has(element.frameId)) {
         nextSelectedCandidateIds.delete(element.id);
-      }
-      if (!nextSelectedCandidateIds.has(element.id)) {
-        const excludedGroupId = this.getSelectableGroupId(
-          element,
-          prevState.editingGroupId,
-        );
-
-        if (excludedGroupId) {
-          excludedGroupIds.add(excludedGroupId);
-        }
       }
     }
 
     return this.finalizeGroupSelection(
       prevState,
-      projectedCandidates.filter(
-        (element) =>
-          nextSelectedCandidateIds.has(element.id) &&
-          !element.groupIds.some((groupId) => excludedGroupIds.has(groupId)),
-      ),
+      nextSelectedCandidateIds,
+      standaloneCandidateIds,
+      targetGroupIds,
       groups,
     );
   };
 
   private finalizeGroupSelection(
     prevState: AppState,
-    projectedCandidates: readonly NonDeletedExcalidrawElement[],
+    selectableElementIds: ReadonlySet<string>,
+    standaloneCandidateIds: ReadonlySet<string>,
+    targetGroupIds: ReadonlySet<string>,
     groups: ReadonlyMap<string, readonly string[]>,
   ) {
-    const elementsMap = this.app.scene.getNonDeletedElementsMap();
     const normalizedSelectedElementIds: Record<string, true> = {};
     const selectedGroupIds: AppState["selectedGroupIds"] = {};
 
-    // of the possible elements, check to ensure they aren't members
-    // of the excluded groups, and compile selectedGroupIds
-    for (const element of projectedCandidates) {
-      normalizedSelectedElementIds[element.id] = true;
-
-      const selectedGroupId = this.getSelectableGroupId(
-        element,
-        prevState.editingGroupId,
-      );
-
-      if (selectedGroupId) {
-        selectedGroupIds[selectedGroupId] = true;
+    for (const elementId of standaloneCandidateIds) {
+      if (selectableElementIds.has(elementId)) {
+        normalizedSelectedElementIds[elementId] = true;
       }
     }
 
-    if (!Object.keys(selectedGroupIds).length) {
-      const nextSelectedElementIds = makeNextSelectedElementIds(
-        normalizedSelectedElementIds,
-        prevState,
-      );
+    for (const groupId of targetGroupIds) {
+      const memberIds = groups.get(groupId);
 
-      return {
-        editingGroupId: Object.keys(nextSelectedElementIds).length
-          ? prevState.editingGroupId
-          : null,
-        selectedGroupIds,
-        selectedElementIds: nextSelectedElementIds,
-      };
-    }
-
-    // expand groups that remain selected, post frame/group handling
-    // to ensure member count of any selectedGroupId is > 1
-    // carry over from selectGroupsForSelectedElements.
-    const groupMemberCounts = new Map<string, number>();
-
-    for (const selectedGroupId of Object.keys(selectedGroupIds)) {
-      const elementIds = groups.get(selectedGroupId) ?? [];
-
-      for (const elementId of elementIds) {
-        const element = elementsMap.get(elementId);
-        const firstSelectedGroupId = element?.groupIds.find(
-          (groupId) => selectedGroupIds[groupId],
-        );
-
-        if (element && firstSelectedGroupId === selectedGroupId) {
-          normalizedSelectedElementIds[element.id] = true;
-          groupMemberCounts.set(
-            selectedGroupId,
-            (groupMemberCounts.get(selectedGroupId) ?? 0) + 1,
-          );
+      // A chosen group remains atomic only if every exhaustively indexed member
+      // survived frame collision filtering.
+      if (
+        memberIds &&
+        memberIds.every((elementId) => selectableElementIds.has(elementId))
+      ) {
+        selectedGroupIds[groupId] = memberIds.length > 1;
+        for (const elementId of memberIds) {
+          normalizedSelectedElementIds[elementId] = true;
         }
-      }
-    }
-
-    for (const selectedGroupId of Object.keys(selectedGroupIds)) {
-      const memberCount = groupMemberCounts.get(selectedGroupId) ?? 0;
-
-      if (memberCount < 2) {
-        selectedGroupIds[selectedGroupId] = false;
       }
     }
 
